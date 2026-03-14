@@ -1,0 +1,27 @@
+# RAG Pipeline for PDF Documents - required stack
+# Python 3.10+
+
+# PDF parsing
+pdfplumber
+PyPDF2
+PyMuPDF
+
+# Chunking / NLP
+nltk
+spacy
+
+# Embeddings / LLM access
+openai
+litellm
+instructor
+
+# Retrieval
+faiss-cpu
+rank-bm25
+
+# Validation and UX
+pydantic
+rich
+
+# Optional but commonly useful for this project
+python-dotenv
