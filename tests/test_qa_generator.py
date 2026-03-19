@@ -8,12 +8,19 @@ Citations:
   - _instructions.md L623 (per-config QA, chunk ID validation)
 """
 
+import json
+import os
+import shutil
+import tempfile
 from unittest.mock import patch, MagicMock
 
 import pytest
 
 from src.models import Chunk, ChunkMetadata, QAExample
-from src.qa_generator import generate_qa_for_chunk, generate_qa_dataset
+from src.qa_generator import (
+    generate_qa_for_chunk, generate_qa_dataset,
+    get_qa_path, save_qa_dataset, load_qa_dataset,
+)
 
 
 def _make_chunk(text: str, page: int, index: int) -> Chunk:
@@ -136,3 +143,84 @@ class TestGenerateQADataset:
             ]
             results = generate_qa_dataset(sample_chunks)
         assert len(results) == 2  # skipped the failed one
+
+
+# ---------------------------------------------------------------------------
+# Persistence (save/load JSONL)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def tmp_dir():
+    """Create a temp directory, clean up after test."""
+    d = tempfile.mkdtemp()
+    yield d
+    shutil.rmtree(d)
+
+
+class TestGetQAPath:
+    """Verify deterministic path generation for QA datasets."""
+
+    def test_includes_config_id(self):
+        path = get_qa_path("pypdf_fixed_size_size500_overlap50")
+        assert "pypdf_fixed_size_size500_overlap50" in path
+
+    def test_ends_with_jsonl(self):
+        path = get_qa_path("some_config")
+        assert path.endswith(".jsonl")
+
+    def test_deterministic(self):
+        p1 = get_qa_path("config_abc")
+        p2 = get_qa_path("config_abc")
+        assert p1 == p2
+
+    def test_different_configs_different_paths(self):
+        p1 = get_qa_path("config_abc")
+        p2 = get_qa_path("config_xyz")
+        assert p1 != p2
+
+    def test_custom_qa_dir(self):
+        path = get_qa_path("config_abc", qa_dir="/tmp/custom_qa")
+        assert path.startswith("/tmp/custom_qa/")
+
+
+class TestQAPersistence:
+    """Verify QA datasets survive a save/load round-trip via JSONL."""
+
+    def test_save_creates_file(self, sample_chunks, tmp_dir):
+        qa_examples = [_make_mock_qa(c) for c in sample_chunks]
+        path = os.path.join(tmp_dir, "qa.jsonl")
+        save_qa_dataset(qa_examples, path)
+        assert os.path.exists(path)
+
+    def test_round_trip_preserves_data(self, sample_chunks, tmp_dir):
+        qa_examples = [_make_mock_qa(c) for c in sample_chunks]
+        path = os.path.join(tmp_dir, "qa.jsonl")
+        save_qa_dataset(qa_examples, path)
+        loaded = load_qa_dataset(path)
+        assert len(loaded) == len(qa_examples)
+        for original, restored in zip(qa_examples, loaded):
+            assert original.question == restored.question
+            assert original.relevant_chunk_ids == restored.relevant_chunk_ids
+            assert original.source_page == restored.source_page
+            assert original.chunk_method == restored.chunk_method
+
+    def test_file_is_valid_jsonl(self, sample_chunks, tmp_dir):
+        """Each line should be independently parseable JSON."""
+        qa_examples = [_make_mock_qa(c) for c in sample_chunks]
+        path = os.path.join(tmp_dir, "qa.jsonl")
+        save_qa_dataset(qa_examples, path)
+        with open(path) as f:
+            lines = f.readlines()
+        assert len(lines) == len(qa_examples)
+        for line in lines:
+            parsed = json.loads(line)
+            assert "question" in parsed
+            assert "relevant_chunk_ids" in parsed
+
+    def test_load_returns_qa_example_instances(self, sample_chunks, tmp_dir):
+        qa_examples = [_make_mock_qa(c) for c in sample_chunks]
+        path = os.path.join(tmp_dir, "qa.jsonl")
+        save_qa_dataset(qa_examples, path)
+        loaded = load_qa_dataset(path)
+        for qa in loaded:
+            assert isinstance(qa, QAExample)

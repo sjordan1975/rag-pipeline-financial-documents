@@ -13,6 +13,8 @@ Citations:
 
 from __future__ import annotations
 
+import json
+import os
 import random
 
 from src.models import Chunk, QAExample
@@ -135,3 +137,56 @@ def generate_qa_dataset(
             continue
 
     return results
+
+
+# ---------------------------------------------------------------------------
+# Persistence (JSONL)
+# ---------------------------------------------------------------------------
+
+QA_DIR = "data/qa"
+
+
+def get_qa_path(config_id: str, qa_dir: str = QA_DIR) -> str:
+    """Deterministic path for a config's QA dataset.
+
+    Convention: data/qa/{config_id}.jsonl
+    Mirrors the embedding cache pattern (data/embeddings/{config_id}_{model}.npy).
+
+    Args:
+        config_id: Chunking config identifier (from ChunkingConfig.config_id).
+        qa_dir: Base directory for QA files.
+
+    Returns:
+        Full path to the JSONL file.
+    """
+    return os.path.join(qa_dir, f"{config_id}.jsonl")
+
+
+def save_qa_dataset(qa_examples: list[QAExample], path: str) -> None:
+    """Save QA examples to a JSONL file (one JSON object per line).
+
+    Args:
+        qa_examples: List of QAExample objects to persist.
+        path: Output file path.
+    """
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        for qa in qa_examples:
+            f.write(json.dumps(qa.model_dump(), ensure_ascii=False) + "\n")
+
+
+def load_qa_dataset(path: str) -> list[QAExample]:
+    """Load QA examples from a JSONL file.
+
+    Args:
+        path: Path to the JSONL file.
+
+    Returns:
+        List of validated QAExample objects.
+    """
+    qa_examples: list[QAExample] = []
+    with open(path) as f:
+        for line in f:
+            data = json.loads(line.strip())
+            qa_examples.append(QAExample(**data))
+    return qa_examples
