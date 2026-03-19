@@ -3,7 +3,7 @@
 
 # PDF parsing
 pdfplumber
-PyPDF2
+pypdf
 PyMuPDF
 
 # Chunking / NLP
@@ -23,5 +23,19 @@ rank-bm25
 pydantic
 rich
 
-# Optional but commonly useful for this project
+# Visualization (6 required charts)
+matplotlib
+seaborn
+
+# Numerical (FAISS, embeddings)
+numpy
+
+# Reranking
+cohere
+
+# Utilities
 python-dotenv
+
+# Testing
+pytest
+pytest-cov
