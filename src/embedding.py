@@ -19,7 +19,45 @@ import os
 from pathlib import Path
 
 import numpy as np
+from dotenv import load_dotenv
 from openai import OpenAI
+
+from src.retry import retry_with_backoff
+
+# ---------------------------------------------------------------------------
+# Lazy client initialization
+# ---------------------------------------------------------------------------
+
+_client = None
+
+
+def _get_client() -> OpenAI:
+    """Return an OpenAI client, initialising on first call.
+
+    python-dotenv loads environment variables from a .env.local file into
+    os.environ. This keeps sensitive data (like API keys) out of source code
+    and version control.
+    """
+    global _client
+    if _client is not None:
+        return _client
+
+    for candidate in [Path(".env.local"), Path("../.env.local")]:
+        if candidate.exists():
+            load_dotenv(dotenv_path=str(candidate))
+            break
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    base_url = os.getenv("OPENAI_BASE_URL")
+
+    if not api_key:
+        raise ValueError(
+            "OPENAI_API_KEY not found in environment variables. "
+            "Please create a .env.local file with your API key."
+        )
+
+    _client = OpenAI(api_key=api_key, base_url=base_url)
+    return _client
 
 # ---------------------------------------------------------------------------
 # Batch splitting
@@ -107,11 +145,15 @@ def embed_texts(
             return cached
 
     # Batch embed via OpenAI API
-    client = OpenAI()
+    client = _get_client()
     all_embeddings: list[list[float]] = []
 
     for batch in split_into_batches(texts, max_batch_size):
-        response = client.embeddings.create(input=batch, model=model)
+        response = retry_with_backoff(
+            client.embeddings.create,
+            args=(),
+            kwargs={"input": batch, "model": model},
+        )
         # Response embeddings are ordered by index
         batch_embeddings = [item.embedding for item in sorted(response.data, key=lambda x: x.index)]
         all_embeddings.extend(batch_embeddings)

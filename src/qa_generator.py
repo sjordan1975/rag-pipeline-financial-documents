@@ -16,8 +16,12 @@ from __future__ import annotations
 import json
 import os
 import random
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 from src.models import Chunk, QAExample
+from src.retry import retry_with_backoff
 
 # ---------------------------------------------------------------------------
 # Lazy client initialization
@@ -27,7 +31,12 @@ _client = None
 
 
 def _get_client():
-    """Lazy-init Instructor-wrapped OpenAI client."""
+    """Return an Instructor-wrapped OpenAI client, initialising on first call.
+
+    python-dotenv loads environment variables from a .env.local file into
+    os.environ. This keeps sensitive data (like API keys) out of source code
+    and version control.
+    """
     global _client
     if _client is not None:
         return _client
@@ -35,7 +44,23 @@ def _get_client():
     import instructor
     from openai import OpenAI
 
-    _client = instructor.from_openai(OpenAI())
+    for candidate in [Path(".env.local"), Path("../.env.local")]:
+        if candidate.exists():
+            load_dotenv(dotenv_path=str(candidate))
+            break
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    base_url = os.getenv("OPENAI_BASE_URL")
+
+    if not api_key:
+        raise ValueError(
+            "OPENAI_API_KEY not found in environment variables. "
+            "Please create a .env.local file with your API key."
+        )
+
+    _client = instructor.from_openai(
+        OpenAI(api_key=api_key, base_url=base_url)
+    )
     return _client
 
 
@@ -64,14 +89,17 @@ def _call_llm(prompt: str, model: str = "gpt-4o-mini") -> str:
     isolated from the wiring logic.
     """
     client = _get_client()
-    response = client.chat.completions.create(
-        model=model,
-        response_model=None,
-        messages=[
-            {"role": "user", "content": prompt},
-        ],
-        temperature=0.8,
-        max_tokens=150,
+    response = retry_with_backoff(
+        client.chat.completions.create,
+        kwargs={
+            "model": model,
+            "response_model": None,
+            "messages": [
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.8,
+            "max_tokens": 150,
+        },
     )
     return response.choices[0].message.content.strip()
 
