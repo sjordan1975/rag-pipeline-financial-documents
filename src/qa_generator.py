@@ -171,6 +171,42 @@ def generate_qa_dataset(
 # Persistence (JSONL)
 # ---------------------------------------------------------------------------
 
+CHUNKS_DIR = "data/chunks"
+
+
+def get_chunks_path(config_id: str, chunks_dir: str = CHUNKS_DIR) -> str:
+    """Deterministic path for a config's persisted chunks.
+
+    Convention: data/chunks/{config_id}.jsonl
+
+    Args:
+        config_id: Chunking config identifier (from ChunkingConfig.config_id).
+        chunks_dir: Base directory for chunk files.
+
+    Returns:
+        Full path to the JSONL file.
+    """
+    return os.path.join(chunks_dir, f"{config_id}.jsonl")
+
+
+def save_chunks(chunks: list[Chunk], path: str) -> None:
+    """Save chunks to a JSONL file (one JSON object per line)."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        for chunk in chunks:
+            f.write(json.dumps(chunk.model_dump(), ensure_ascii=False) + "\n")
+
+
+def load_chunks(path: str) -> list[Chunk]:
+    """Load chunks from a JSONL file, preserving original IDs."""
+    chunks: list[Chunk] = []
+    with open(path) as f:
+        for line in f:
+            data = json.loads(line.strip())
+            chunks.append(Chunk(**data))
+    return chunks
+
+
 QA_DIR = "data/qa"
 
 
@@ -178,7 +214,6 @@ def get_qa_path(config_id: str, qa_dir: str = QA_DIR) -> str:
     """Deterministic path for a config's QA dataset.
 
     Convention: data/qa/{config_id}.jsonl
-    Mirrors the embedding cache pattern (data/embeddings/{config_id}_{model}.npy).
 
     Args:
         config_id: Chunking config identifier (from ChunkingConfig.config_id).

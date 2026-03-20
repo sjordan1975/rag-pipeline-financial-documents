@@ -76,9 +76,14 @@ def _call_cohere_rerank(
     if top_n is not None:
         kwargs["top_n"] = top_n
 
+    import cohere
+
     return retry_with_backoff(
         client.rerank,
         kwargs=kwargs,
+        max_retries=5,
+        base_delay=7.0,
+        retryable_exceptions=(cohere.errors.too_many_requests_error.TooManyRequestsError,),
     )
 
 
