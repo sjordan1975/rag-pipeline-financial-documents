@@ -1,7 +1,6 @@
 # RAG Pipeline for Financial Document Search
 
-A retrieval-augmented generation evaluation pipeline that systematically optimizes how a financial services team searches their corporate filings. Given a 160-page annual report, the system compares chunking strategies, embedding models, and retrieval methods to find the configuration that puts the right passage in front of an analyst on the first try. Built with PyMuPDF, OpenAI embeddings, FAISS, BM25, and Cohere reranking.
-
+A retrieval-augmented generation evaluation pipeline that systematically optimizes how a financial services team searches their corporate filings. Given a 160-page annual report, the system compares chunking strategies, embedding models, and retrieval methods to find the configuration that puts the right passage in front of an analyst on the first try.
 ## Overview
 
 A financial services client needs their analysts to query annual reports accurately and quickly — "What was the year-over-year revenue growth?", "What drove the increase in operating expenses?", "How did the company's international expansion perform?" This pipeline evaluates 66 retrieval configurations against synthetic analyst queries to determine how to chunk, embed, and search a 160-page annual report so the relevant passage surfaces first. The result is a production-ready recommendation backed by standard IR metrics across 11 chunking configs, 2 embedding models, and 3 retrieval methods.
